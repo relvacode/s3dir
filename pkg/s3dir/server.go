@@ -6,10 +6,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"golang.org/x/exp/slices"
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
+	"time"
 )
 
 func trimPathSegments(path string) (segments []string) {
@@ -74,6 +77,39 @@ func segmentPrefix(segments []string) string {
 	return b.String()
 }
 
+type ObjectSortFunc func(a, b types.Object) bool
+
+func sortObjectsByLastModified(a, b types.Object) bool {
+	switch {
+	case a.LastModified == nil && b.LastModified == nil:
+		return false
+	case a.LastModified == nil:
+		return true
+	case b.LastModified == nil:
+		return false
+	default:
+		return a.LastModified.After(*b.LastModified)
+	}
+}
+
+func sortObjectsBySize(a, b types.Object) bool {
+	return a.Size > b.Size
+}
+
+func sortObjectsByName(a, b types.Object) bool {
+	var (
+		pa = path.Base(*a.Key)
+		pb = path.Base(*b.Key)
+	)
+
+	return pa < pb
+}
+
+type SortOption struct {
+	Name  string
+	Value string
+}
+
 func (s *Server) ListBucketObjects(rw http.ResponseWriter, r *http.Request, bucket string, segments []string) {
 	var params = s3.ListObjectsV2Input{
 		Bucket:    &bucket,
@@ -111,10 +147,68 @@ func (s *Server) ListBucketObjects(rw http.ResponseWriter, r *http.Request, buck
 		params.ContinuationToken = response.ContinuationToken
 	}
 
+	var sortFunc ObjectSortFunc
+	var noSortCookie bool
+
+	_, sortInQuery := r.URL.Query()["sort"]
+	var sortByField = r.URL.Query().Get("sort")
+	if !sortInQuery {
+		noSortCookie = true
+		c, err := r.Cookie("sort")
+		if err == nil {
+			sortByField = c.Value
+		}
+	}
+
+	switch sortByField {
+	case "lastModified":
+		sortFunc = sortObjectsByLastModified
+	case "name":
+		sortFunc = sortObjectsByName
+	case "size":
+		sortFunc = sortObjectsBySize
+	}
+
+	if sortFunc != nil {
+		slices.SortFunc(objects, sortFunc)
+	}
+
+	if !noSortCookie {
+		sortCookie := http.Cookie{
+			Name:     "sort",
+			Value:    sortByField,
+			HttpOnly: true,
+			Path:     "/",
+			Expires:  time.Unix(2147483647, 0), // Max cookie expiration time according to RFC2965 (32bit integer)
+		}
+
+		http.SetCookie(rw, &sortCookie)
+	}
+
 	RenderTemplate(rw, r, templates["objects.tmpl"], map[string]any{
-		"Segments": append([]string{bucket}, segments...),
-		"Objects":  objects,
-		"Prefixes": prefixes,
+		"Segments":           append([]string{bucket}, segments...),
+		"QueryString":        r.URL.RawQuery,
+		"Objects":            objects,
+		"Prefixes":           prefixes,
+		"SelectedSortOption": sortByField,
+		"SortOptions": []SortOption{
+			{
+				Name:  "",
+				Value: "",
+			},
+			{
+				Name:  "Name",
+				Value: "name",
+			},
+			{
+				Name:  "Last Modified",
+				Value: "lastModified",
+			},
+			{
+				Name:  "Size",
+				Value: "size",
+			},
+		},
 	})
 }
 

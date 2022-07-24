@@ -1,6 +1,7 @@
 {{ define "main" }}
     <html lang="en">
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{{ block "title" . }}{{ end }}</title>
         {{ block "globalstyle" . }}{{ end}}
         <style>
@@ -22,8 +23,8 @@
                 border-bottom: 1px solid rgb(43, 46, 57);
                 display: flex;
                 flex-direction: row;
-                justify-content: center;
-                color: rgb(212, 218, 225);
+                align-items: center;
+
             }
 
             .header > :last-child {

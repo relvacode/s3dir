@@ -13,8 +13,8 @@ import (
 )
 
 type CLI struct {
-	ListenAddr string `long:"listen-addr" env:"LISTEN_ADDR" default:"127.0.0.1:9001" description:"Listen on this address"`
-	Endpoint   string `long:"endpoint" env:"ENDPOINT" description:"AWS S3 endpoint"`
+	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" default:"127.0.0.1:9001" description:"Listen on this address"`
+	Endpoint      string `long:"endpoint" env:"ENDPOINT" description:"AWS S3 endpoint"`
 }
 
 func Main() error {
@@ -47,7 +47,7 @@ func Main() error {
 	}
 
 	httpServer := &http.Server{
-		Addr:    cli.ListenAddr,
+		Addr:    cli.ListenAddress,
 		Handler: s3dir.New(s3.NewFromConfig(cfg)),
 	}
 

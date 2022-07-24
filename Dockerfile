@@ -11,6 +11,6 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /bin/s3di
 
 FROM --platform=${TARGETPLATFORM} alpine
 ENV LISTEN_ADDRESS=0.0.0.0:80
-COPY --from=compiler /bin/s3dir /bin/s3dri
+COPY --from=compiler /bin/s3dir /bin/s3dir
 
 ENTRYPOINT ["/bin/s3dir"]

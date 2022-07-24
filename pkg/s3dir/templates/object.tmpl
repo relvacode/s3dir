@@ -1,0 +1,30 @@
+{{ template "main" .}}
+{{ define "title" }}{{ .Name }}{{ end }}
+{{ define "head" }}
+    <style>
+        .object-container {
+            margin: 32px;
+        }
+        .object {
+            margin: 0 auto;
+            width: max-content;
+            text-align: center;
+        }
+    </style>
+{{ end}}
+{{ define "content" }}
+
+    <div class="object-container">
+        <div class="object">
+            <h3>{{ .Name }}</h3>
+            <pre>s3://{{ .Bucket}}/{{ .Key }}</pre>
+            <p>{{ .Object.ContentType }}</p>
+            <p>{{ formatBytes .Object.ContentLength }}</p>
+            <p>{{ formatTime .Object.LastModified }}</p>
+
+            <a href="?location" target="_blank">Download</a>
+        </div>
+    </div>
+
+
+{{ end }}

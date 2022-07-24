@@ -1,0 +1,20 @@
+{{ template "main" .}}
+{{ define "title" }}{{ .Code }}{{ end }}
+{{ define "head" }}
+    <style>
+        .error-container {
+            margin: 0 auto;
+            text-align: center;
+            padding: 18px;
+            border-radius: 4px;
+            background: #d94545;
+            color: #d4dae1;
+        }
+    </style>
+{{ end}}
+{{ define "content" }}
+    <div class="error-container">
+        <h1>{{ .Code }}</h1>
+        <p>{{ .Message }}</p>
+    </div>
+{{ end }}

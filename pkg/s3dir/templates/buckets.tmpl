@@ -1,0 +1,28 @@
+{{ template "main" .}}
+{{ define "title" }}S3{{ end }}
+{{ define "head" }}
+    <style>
+        .entry {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            padding: 6px;
+        }
+
+        .entry:hover {
+            background: #c7c7c7;
+        }
+
+        .entry > :first-child {
+            flex-grow: 1;
+        }
+    </style>
+{{ end }}
+{{ define "content" }}
+    {{ range .Buckets }}
+        <div class="entry">
+            <a href="/{{ .Name }}/">{{ .Name }}</a>
+            <div>{{ formatTime .CreationDate }}</div>
+        </div>
+    {{ end }}
+{{ end }}

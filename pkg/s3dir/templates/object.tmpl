@@ -3,19 +3,29 @@
 {{ define "head" }}
     <style>
         .object-container {
-            margin: 32px;
+            margin: 1rem;
         }
         .object {
             margin: 0 auto;
-            width: max-content;
             text-align: center;
             background: rgb(43,42,51);
-            border-radius: 4px;
-            padding: 16px;
+            border-radius: 4px 4px 0 0;
+            padding: 1rem;
         }
 
-        .object a {
+        a.download {
+            display: block;
+            margin: 0 auto;
+            background: rgb(48, 47, 57);
+            border-radius: 0 0 4px 4px;
+            padding: 1rem;
             font-weight: 700;
+            text-align: center;
+            border-top: 1px solid #262431;
+        }
+
+        a.download:hover {
+            background: #353442;
         }
     </style>
 {{ end}}
@@ -24,13 +34,13 @@
     <div class="object-container">
         <div class="object">
             <h3>{{ .Name }}</h3>
-            <pre>s3://{{ .Bucket}}/{{ .Key }}</pre>
             <p>{{ .Object.ContentType }}</p>
             <p>{{ formatBytes .Object.ContentLength }}</p>
             <p>{{ formatTime .Object.LastModified }}</p>
-
-            <a href="?location" target="_blank">Download</a>
         </div>
+
+        <a class="download" href="?location" target="_blank">Download</a>
+
     </div>
 
 

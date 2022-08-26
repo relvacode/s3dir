@@ -1,5 +1,5 @@
 {{ template "main" .}}
-{{ define "title" }}S3{{ end }}
+{{ define "title" }}{{ .Title }}{{ end }}
 {{ define "head" }}
     {{ block "entrystyle" . }}{{ end }}
 {{ end }}

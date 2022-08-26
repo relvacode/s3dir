@@ -51,11 +51,28 @@ func init() {
 	}
 }
 
+type Renderer struct {
+	// Title is the page title
+	Title string
+}
+
 // RenderTemplateCode renders an HTML template to the target response using the supplied status code.
 // It uses compression where requested by the client.
-func RenderTemplateCode(code int, rw http.ResponseWriter, r *http.Request, t *template.Template, ctx any) {
+func (r *Renderer) RenderTemplateCode(code int, rw http.ResponseWriter, req *http.Request, t *template.Template, ctx map[string]any) {
+	// Create template context specific to the render.
+	// Combination of input context and global renderer context.
+	localCtx := map[string]any{
+		"Title": r.Title,
+	}
+
+	if len(ctx) > 0 {
+		for k, v := range ctx {
+			localCtx[k] = v
+		}
+	}
+
 	var b bytes.Buffer
-	err := t.Execute(&b, ctx) // TODO do something with err
+	err := t.Execute(&b, localCtx)
 	if err != nil {
 		log.Println(err)
 	}
@@ -64,7 +81,7 @@ func RenderTemplateCode(code int, rw http.ResponseWriter, r *http.Request, t *te
 
 	// Handle response compression
 encoding:
-	for _, enc := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+	for _, enc := range strings.Split(req.Header.Get("Accept-Encoding"), ",") {
 		switch encoder := strings.TrimSpace(enc); encoder {
 		case "gzip", "x-gzip":
 			rw.Header().Set("Content-Encoding", encoder)
@@ -113,11 +130,11 @@ encoding:
 	_, _ = b.WriteTo(rw)
 }
 
-func RenderTemplate(rw http.ResponseWriter, r *http.Request, t *template.Template, ctx any) {
-	RenderTemplateCode(http.StatusOK, rw, r, t, ctx)
+func (r *Renderer) RenderTemplate(rw http.ResponseWriter, req *http.Request, t *template.Template, ctx map[string]any) {
+	r.RenderTemplateCode(http.StatusOK, rw, req, t, ctx)
 }
 
-func RenderError(rw http.ResponseWriter, r *http.Request, err error, segments ...string) {
+func (r *Renderer) RenderError(rw http.ResponseWriter, req *http.Request, err error, segments ...string) {
 	var errorCode = "Error"
 	var errorMessage = err.Error()
 
@@ -127,7 +144,7 @@ func RenderError(rw http.ResponseWriter, r *http.Request, err error, segments ..
 		errorMessage = ae.ErrorMessage()
 	}
 
-	RenderTemplateCode(http.StatusInternalServerError, rw, r, templates["error.tmpl"], map[string]any{
+	r.RenderTemplateCode(http.StatusInternalServerError, rw, req, templates["error.tmpl"], map[string]any{
 		"Segments": segments,
 		"Code":     errorCode,
 		"Message":  errorMessage,

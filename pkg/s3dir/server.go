@@ -40,24 +40,26 @@ func trimPathSegments(path string) (segments []string) {
 	return segments
 }
 
-func New(s3Client *s3.Client) *Server {
+func New(s3Client *s3.Client, rd *Renderer) *Server {
 	return &Server{
 		s3: s3Client,
+		rd: rd,
 	}
 }
 
 type Server struct {
 	s3 *s3.Client
+	rd *Renderer
 }
 
 func (s *Server) ListBuckets(rw http.ResponseWriter, r *http.Request) {
 	response, err := s.s3.ListBuckets(r.Context(), new(s3.ListBucketsInput))
 	if err != nil {
-		RenderError(rw, r, err)
+		s.rd.RenderError(rw, r, err)
 		return
 	}
 
-	RenderTemplate(rw, r, templates["buckets.tmpl"], map[string]any{
+	s.rd.RenderTemplate(rw, r, templates["buckets.tmpl"], map[string]any{
 		"Segments": []string{},
 		"Buckets":  response.Buckets,
 	})
@@ -124,7 +126,7 @@ func (s *Server) ListBucketObjects(rw http.ResponseWriter, r *http.Request, buck
 	for {
 		response, err := s.s3.ListObjectsV2(r.Context(), &params)
 		if err != nil {
-			RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+			s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 			return
 		}
 
@@ -185,7 +187,7 @@ func (s *Server) ListBucketObjects(rw http.ResponseWriter, r *http.Request, buck
 		http.SetCookie(rw, &sortCookie)
 	}
 
-	RenderTemplate(rw, r, templates["objects.tmpl"], map[string]any{
+	s.rd.RenderTemplate(rw, r, templates["objects.tmpl"], map[string]any{
 		"Segments":           append([]string{bucket}, segments...),
 		"QueryString":        r.URL.RawQuery,
 		"Objects":            objects,
@@ -221,7 +223,7 @@ func (s *Server) GetBucketObjectLocation(rw http.ResponseWriter, r *http.Request
 	})
 
 	if err != nil {
-		RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+		s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 		return
 	}
 
@@ -237,11 +239,11 @@ func (s *Server) BucketObject(rw http.ResponseWriter, r *http.Request, bucket st
 	})
 
 	if err != nil {
-		RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+		s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 		return
 	}
 
-	RenderTemplate(rw, r, templates["object.tmpl"], map[string]any{
+	s.rd.RenderTemplate(rw, r, templates["object.tmpl"], map[string]any{
 		"Segments": append([]string{bucket}, segments...),
 		"Name":     segments[len(segments)-1],
 		"Bucket":   bucket,
@@ -273,7 +275,7 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 		response, err := s.s3.ListObjectsV2(r.Context(), &params)
 		if err != nil {
 			sw.Abort(func(rw http.ResponseWriter) {
-				RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+				s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 			})
 			return
 		}
@@ -294,7 +296,7 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 			})
 			if err != nil {
 				sw.Abort(func(rw http.ResponseWriter) {
-					RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+					s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 				})
 				return
 			}
@@ -302,7 +304,7 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 			resp, err := http.DefaultClient.Get(signedUrl.URL)
 			if err != nil {
 				sw.Abort(func(rw http.ResponseWriter) {
-					RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+					s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 				})
 				return
 			}
@@ -312,7 +314,7 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 
 			if err != nil {
 				sw.Abort(func(rw http.ResponseWriter) {
-					RenderError(rw, r, err, append([]string{bucket}, segments...)...)
+					s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 				})
 				return
 			}

@@ -13,9 +13,10 @@ import (
 )
 
 type CLI struct {
-	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" default:"127.0.0.1:9001" description:"Listen on this address"`
-	Endpoint      string `long:"endpoint" env:"ENDPOINT" description:"AWS S3 endpoint"`
-	Application   string `long:"application" env:"APPLICATION" default:"S3" description:"Your application name. Used to configure the page title."`
+	ListenAddress      string   `long:"listen-address" env:"LISTEN_ADDRESS" default:"127.0.0.1:9001" description:"Listen on this address"`
+	Endpoint           string   `long:"endpoint" env:"ENDPOINT" description:"AWS S3 endpoint"`
+	Application        string   `long:"application" env:"APPLICATION" default:"S3" description:"Your application name. Used to configure the page title"`
+	ForwardHTTPHeaders []string `long:"forward-http-header" env:"FORWARD_HTTP_HEADERS" description:"Forward these incoming HTTP headers to the S3 server"`
 }
 
 func Main() error {
@@ -49,7 +50,7 @@ func Main() error {
 
 	httpServer := &http.Server{
 		Addr:    cli.ListenAddress,
-		Handler: s3dir.New(s3.NewFromConfig(cfg), &s3dir.Renderer{Title: cli.Application}),
+		Handler: s3dir.New(s3.NewFromConfig(cfg), &s3dir.Renderer{Title: cli.Application}, cli.ForwardHTTPHeaders),
 	}
 
 	return httpServer.ListenAndServe()

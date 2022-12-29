@@ -6,9 +6,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
+	http2 "github.com/aws/smithy-go/transport/http"
 	"golang.org/x/exp/slices"
 	"io"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path"
 	"strings"
@@ -40,20 +43,40 @@ func trimPathSegments(path string) (segments []string) {
 	return segments
 }
 
-func New(s3Client *s3.Client, rd *Renderer) *Server {
+func New(s3Client *s3.Client, rd *Renderer, forwardHeaders []string) *Server {
 	return &Server{
-		s3: s3Client,
-		rd: rd,
+		s3:             s3Client,
+		rd:             rd,
+		forwardHeaders: forwardHeaders,
 	}
 }
 
 type Server struct {
-	s3 *s3.Client
-	rd *Renderer
+	s3             *s3.Client
+	rd             *Renderer
+	forwardHeaders []string
+}
+
+// apiOptionsForRequest creates an AWS SDK Go option to inject HTTP header values by copying them from the HTTP request.
+func (s *Server) apiOptionsForRequest(r *http.Request) func(options *s3.Options) {
+	return func(options *s3.Options) {
+		var apiOptions []func(stack *middleware.Stack) error
+
+		for _, header := range s.forwardHeaders {
+			var headerKey = textproto.CanonicalMIMEHeaderKey(header)
+			for _, headerValue := range r.Header[headerKey] {
+				apiOptions = append(apiOptions, http2.AddHeaderValue(headerKey, headerValue))
+			}
+		}
+
+		if len(apiOptions) > 0 {
+			options.APIOptions = apiOptions
+		}
+	}
 }
 
 func (s *Server) ListBuckets(rw http.ResponseWriter, r *http.Request) {
-	response, err := s.s3.ListBuckets(r.Context(), new(s3.ListBucketsInput))
+	response, err := s.s3.ListBuckets(r.Context(), new(s3.ListBucketsInput), s.apiOptionsForRequest(r))
 	if err != nil {
 		s.rd.RenderError(rw, r, err)
 		return
@@ -124,7 +147,7 @@ func (s *Server) ListBucketObjects(rw http.ResponseWriter, r *http.Request, buck
 	var prefixKnown = make(map[string]struct{})
 
 	for {
-		response, err := s.s3.ListObjectsV2(r.Context(), &params)
+		response, err := s.s3.ListObjectsV2(r.Context(), &params, s.apiOptionsForRequest(r))
 		if err != nil {
 			s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
 			return
@@ -236,7 +259,7 @@ func (s *Server) BucketObject(rw http.ResponseWriter, r *http.Request, bucket st
 	response, err := s.s3.HeadObject(r.Context(), &s3.HeadObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
-	})
+	}, s.apiOptionsForRequest(r))
 
 	if err != nil {
 		s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
@@ -272,7 +295,7 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 	var zw = zip.NewWriter(sw)
 
 	for {
-		response, err := s.s3.ListObjectsV2(r.Context(), &params)
+		response, err := s.s3.ListObjectsV2(r.Context(), &params, s.apiOptionsForRequest(r))
 		if err != nil {
 			sw.Abort(func(rw http.ResponseWriter) {
 				s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
@@ -284,16 +307,11 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 			objectKeySegments := trimPathSegments(*object.Key)
 			objectKeySegments = objectKeySegments[len(segments):]
 
-			signedUrl, _ := s3.NewPresignClient(s.s3).PresignGetObject(r.Context(), &s3.GetObjectInput{
+			resp, err := s.s3.GetObject(r.Context(), &s3.GetObjectInput{
 				Bucket: &bucket,
 				Key:    object.Key,
-			})
+			}, s.apiOptionsForRequest(r))
 
-			w, err := zw.CreateHeader(&zip.FileHeader{
-				Name:     strings.Join(objectKeySegments, "/"),
-				Modified: *object.LastModified,
-				Method:   zip.Deflate,
-			})
 			if err != nil {
 				sw.Abort(func(rw http.ResponseWriter) {
 					s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
@@ -301,7 +319,11 @@ func (s *Server) ZipArchive(rw http.ResponseWriter, r *http.Request, bucket stri
 				return
 			}
 
-			resp, err := http.DefaultClient.Get(signedUrl.URL)
+			w, err := zw.CreateHeader(&zip.FileHeader{
+				Name:     strings.Join(objectKeySegments, "/"),
+				Modified: *resp.LastModified,
+				Method:   zip.Deflate,
+			})
 			if err != nil {
 				sw.Abort(func(rw http.ResponseWriter) {
 					s.rd.RenderError(rw, r, err, append([]string{bucket}, segments...)...)
